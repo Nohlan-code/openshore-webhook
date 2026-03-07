@@ -123,6 +123,15 @@ async function initDB() {
     }
   }
 
+  // Ajout des colonnes manquantes si elles n'existent pas (migrations)
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS budget TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS company TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE revisions ADD COLUMN IF NOT EXISTS project_name TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE revisions ADD COLUMN IF NOT EXISTS revision_aspect TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE revisions ADD COLUMN IF NOT EXISTS revision_content TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE revisions ADD COLUMN IF NOT EXISTS revision_text TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE revisions ADD COLUMN IF NOT EXISTS revision_other TEXT DEFAULT ''`);
+
   console.log("✅ DB initialisée");
 }
 
@@ -258,23 +267,30 @@ app.post("/orders", async (req, res) => {
 });
 app.put("/orders/:id", async (req, res) => {
   try {
-    const o=req.body;
-    await pool.query(`UPDATE orders SET status=$2,freelance_id=$3,deadline=$4,project_type=$5,
-      client_name=$6,client_email=$7,client_phone=$8,company=$9,description=$10,budget=$11 WHERE id=$1`,
-      [req.params.id,
-       o.status||"new",
-       o.freelanceId||null,
-       o.deadline||null,
-       o.projectType||"Landing page",
-       o.clientName||"",
-       o.clientEmail||"",
-       o.clientPhone||"",
-       o.company||"",
-       o.description||"",
-       o.budget||""]);
-    const {rows}=await pool.query("SELECT * FROM orders WHERE id=$1",[req.params.id]);
+    const {rows:existing} = await pool.query("SELECT * FROM orders WHERE id=$1", [req.params.id]);
+    if(!existing.length) return res.status(404).json({error:"Not found"});
+    const e = existing[0];
+    const o = req.body;
+    const status      = o.status       ?? e.status       ?? "new";
+    const freelanceId = o.freelanceId  !== undefined ? (o.freelanceId||null) : e.freelance_id;
+    const deadline    = o.deadline     ?? e.deadline     ?? null;
+    const projectType = o.projectType  ?? e.project_type ?? "Landing page";
+    const clientName  = o.clientName   ?? e.client_name  ?? "";
+    const clientEmail = o.clientEmail  ?? e.client_email ?? "";
+    const clientPhone = o.clientPhone  ?? e.client_phone ?? "";
+    const company     = o.company      ?? e.company      ?? "";
+    const description = o.description  ?? e.description  ?? "";
+    const budget      = o.budget       ?? e.budget       ?? "";
+    await pool.query(
+      `UPDATE orders SET status=$2,freelance_id=$3,deadline=$4,project_type=$5,
+       client_name=$6,client_email=$7,client_phone=$8,company=$9,description=$10,budget=$11
+       WHERE id=$1`,
+      [req.params.id, status, freelanceId, deadline, projectType,
+       clientName, clientEmail, clientPhone, company, description, budget]
+    );
+    const {rows} = await pool.query("SELECT * FROM orders WHERE id=$1", [req.params.id]);
     res.json(rowToOrder(rows[0]));
-  } catch (err) { console.error("❌ PUT order:",err.message); res.status(500).json({error:err.message}); }
+  } catch (err) { console.error("❌ PUT order:", err.message); res.status(500).json({error:err.message}); }
 });
 app.delete("/orders/:id", async (req, res) => {
   try { await pool.query("DELETE FROM orders WHERE id=$1",[req.params.id]); res.json({deleted:true}); }
@@ -311,22 +327,29 @@ app.post("/revisions", async (req, res) => {
 });
 app.put("/revisions/:id", async (req, res) => {
   try {
-    const rv=req.body;
-    await pool.query(`UPDATE revisions SET status=$2,freelance_id=$3,deadline=$4,client_name=$5,
-      client_email=$6,client_phone=$7,project_name=$8,revision_aspect=$9,
-      revision_content=$10,revision_text=$11,revision_other=$12 WHERE id=$1`,
-      [req.params.id,
-       rv.status||"new",
-       rv.freelanceId||null,
-       rv.deadline||null,
-       rv.clientName||"",
-       rv.clientEmail||"",
-       rv.clientPhone||"",
-       rv.projectName||"",
-       rv.revisionAspect||"",
-       rv.revisionContent||"",
-       rv.revisionText||"",
-       rv.revisionOther||""]);
+    const {rows:existing} = await pool.query("SELECT * FROM revisions WHERE id=$1", [req.params.id]);
+    if(!existing.length) return res.status(404).json({error:"Not found"});
+    const e  = existing[0];
+    const rv = req.body;
+    const status         = rv.status          ?? e.status          ?? "new";
+    const freelanceId    = rv.freelanceId     !== undefined ? (rv.freelanceId||null) : e.freelance_id;
+    const deadline       = rv.deadline        ?? e.deadline        ?? null;
+    const clientName     = rv.clientName      ?? e.client_name     ?? "";
+    const clientEmail    = rv.clientEmail     ?? e.client_email    ?? "";
+    const clientPhone    = rv.clientPhone     ?? e.client_phone    ?? "";
+    const projectName    = rv.projectName     ?? e.project_name    ?? "";
+    const revisionAspect  = rv.revisionAspect  ?? e.revision_aspect  ?? "";
+    const revisionContent = rv.revisionContent ?? e.revision_content ?? "";
+    const revisionText    = rv.revisionText    ?? e.revision_text    ?? "";
+    const revisionOther   = rv.revisionOther   ?? e.revision_other   ?? "";
+    await pool.query(
+      `UPDATE revisions SET status=$2,freelance_id=$3,deadline=$4,client_name=$5,
+       client_email=$6,client_phone=$7,project_name=$8,revision_aspect=$9,
+       revision_content=$10,revision_text=$11,revision_other=$12 WHERE id=$1`,
+      [req.params.id, status, freelanceId, deadline, clientName,
+       clientEmail, clientPhone, projectName,
+       revisionAspect, revisionContent, revisionText, revisionOther]
+    );
     const {rows}=await pool.query("SELECT * FROM revisions WHERE id=$1",[req.params.id]);
     res.json(rowToRevision(rows[0]));
   } catch (err) { res.status(500).json({error:err.message}); }
@@ -388,6 +411,14 @@ app.post("/tools", async (req, res) => {
 app.delete("/tools/:id", async (req, res) => {
   try { await pool.query("DELETE FROM tools WHERE id=$1",[req.params.id]); res.json({deleted:true}); }
   catch (err) { res.status(500).json({error:err.message}); }
+});
+
+// ─── Debug ────────────────────────────────────────────────────────────────────
+app.get("/debug/order/:id", async (req, res) => {
+  try {
+    const {rows} = await pool.query("SELECT * FROM orders WHERE id=$1", [req.params.id]);
+    res.json(rows[0] || {error:"not found"});
+  } catch(err) { res.status(500).json({error:err.message}); }
 });
 
 // ─── Health ───────────────────────────────────────────────────────────────────
