@@ -261,11 +261,20 @@ app.put("/orders/:id", async (req, res) => {
     const o=req.body;
     await pool.query(`UPDATE orders SET status=$2,freelance_id=$3,deadline=$4,project_type=$5,
       client_name=$6,client_email=$7,client_phone=$8,company=$9,description=$10,budget=$11 WHERE id=$1`,
-      [req.params.id,o.status,o.freelanceId||null,o.deadline,o.projectType,
-       o.clientName,o.clientEmail,o.clientPhone,o.company,o.description,o.budget||""]);
+      [req.params.id,
+       o.status||"new",
+       o.freelanceId||null,
+       o.deadline||null,
+       o.projectType||"Landing page",
+       o.clientName||"",
+       o.clientEmail||"",
+       o.clientPhone||"",
+       o.company||"",
+       o.description||"",
+       o.budget||""]);
     const {rows}=await pool.query("SELECT * FROM orders WHERE id=$1",[req.params.id]);
     res.json(rowToOrder(rows[0]));
-  } catch (err) { res.status(500).json({error:err.message}); }
+  } catch (err) { console.error("❌ PUT order:",err.message); res.status(500).json({error:err.message}); }
 });
 app.delete("/orders/:id", async (req, res) => {
   try { await pool.query("DELETE FROM orders WHERE id=$1",[req.params.id]); res.json({deleted:true}); }
@@ -306,9 +315,18 @@ app.put("/revisions/:id", async (req, res) => {
     await pool.query(`UPDATE revisions SET status=$2,freelance_id=$3,deadline=$4,client_name=$5,
       client_email=$6,client_phone=$7,project_name=$8,revision_aspect=$9,
       revision_content=$10,revision_text=$11,revision_other=$12 WHERE id=$1`,
-      [req.params.id,rv.status,rv.freelanceId||null,rv.deadline,rv.clientName,
-       rv.clientEmail,rv.clientPhone,rv.projectName,
-       rv.revisionAspect||"",rv.revisionContent||"",rv.revisionText||"",rv.revisionOther||""]);
+      [req.params.id,
+       rv.status||"new",
+       rv.freelanceId||null,
+       rv.deadline||null,
+       rv.clientName||"",
+       rv.clientEmail||"",
+       rv.clientPhone||"",
+       rv.projectName||"",
+       rv.revisionAspect||"",
+       rv.revisionContent||"",
+       rv.revisionText||"",
+       rv.revisionOther||""]);
     const {rows}=await pool.query("SELECT * FROM revisions WHERE id=$1",[req.params.id]);
     res.json(rowToRevision(rows[0]));
   } catch (err) { res.status(500).json({error:err.message}); }
